@@ -1,0 +1,14 @@
+{
+  "name": "fba-variations",
+  "version": "1.0.0",
+  "description": "Web UI for building Amazon FBA SIZE/theme variation families via SP-API (31337 LLC).",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "dotenv": "^16.4.5"
+  }
+}

@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FBA Variation Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0c0d10; --panel:#14161c; --panel-2:#181b22; --line:#262a33;
+    --txt:#dde2e9; --muted:#828d9c; --dim:#5a6473;
+    --amber:#ffb02e; --amber-dim:#7a5614;
+    --go:#46d17f; --go-dim:#16321f;
+    --stop:#ff5d52; --stop-dim:#3a1714;
+    --info:#5fc9d8;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:14px;line-height:1.5}
+  body{
+    background-image:
+      linear-gradient(rgba(255,255,255,.015) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.015) 1px,transparent 1px);
+    background-size:32px 32px;
+    min-height:100vh;
+  }
+  a{color:var(--info);text-decoration:none}
+  .mono{font-family:var(--mono)}
+  .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+  /* top bar */
+  header{
+    position:sticky;top:0;z-index:10;
+    display:flex;align-items:center;gap:18px;
+    padding:14px 26px;background:rgba(12,13,16,.86);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:baseline;gap:11px}
+  .brand .mark{font-family:var(--mono);font-weight:600;letter-spacing:.04em;font-size:16px}
+  .brand .mark b{color:var(--amber)}
+  .brand .ver{font-family:var(--mono);font-size:10px;color:var(--dim)}
+  .pills{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .pill{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;padding:5px 10px;border:1px solid var(--line);border-radius:2px;color:var(--muted)}
+  .pill b{color:var(--txt);font-weight:500}
+  .live{border-color:var(--stop-dim);color:var(--stop)}
+  .live::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--stop);margin-right:7px;vertical-align:middle;animation:blink 1.6s steps(2,end) infinite}
+  @keyframes blink{50%{opacity:.25}}
+
+  main{max-width:1160px;margin:0 auto;padding:26px;display:grid;grid-template-columns:minmax(0,1fr) minmax(380px,440px);gap:22px;align-items:start}
+  @media(max-width:920px){main{grid-template-columns:1fr}}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:4px}
+  .panel>h2{margin:0;padding:13px 18px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--amber);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
+  .panel>h2 .n{color:var(--dim);border:1px solid var(--line);border-radius:2px;width:18px;height:18px;display:inline-grid;place-items:center;font-size:10px}
+  .body{padding:18px}
+
+  .field{margin-bottom:14px}
+  .field label{display:block;margin-bottom:5px}
+  input[type=text],input[type=number],select{
+    width:100%;background:var(--bg);border:1px solid var(--line);color:var(--txt);
+    font-family:var(--mono);font-size:13px;padding:9px 11px;border-radius:3px;outline:none;
+  }
+  input:focus,select:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(255,176,46,.12)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .hint{font-size:11.5px;color:var(--dim);margin-top:5px}
+
+  table.children{width:100%;border-collapse:collapse;margin-top:4px}
+  table.children th{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;padding:0 6px 6px}
+  table.children td{padding:3px}
+  table.children input{padding:7px 8px;font-size:12px}
+  .rm{background:none;border:1px solid var(--line);color:var(--dim);border-radius:3px;cursor:pointer;width:30px;height:32px;font-size:15px}
+  .rm:hover{border-color:var(--stop);color:var(--stop)}
+  .add{margin-top:10px;background:none;border:1px dashed var(--line);color:var(--muted);padding:8px 12px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:11px;letter-spacing:.06em}
+  .add:hover{border-color:var(--amber);color:var(--amber)}
+
+  .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+  button.act{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;padding:11px 16px;border-radius:3px;cursor:pointer;border:1px solid var(--line);background:var(--panel-2);color:var(--txt);transition:.12s}
+  button.act:hover{border-color:var(--muted)}
+  button.act:disabled{opacity:.4;cursor:not-allowed}
+  .b-info{border-color:#2c4850;color:var(--info)}
+  .b-info:hover{background:#0f2024}
+  .b-go{border-color:var(--go-dim);color:var(--go)}
+  .b-go:hover{background:var(--go-dim)}
+  .b-live{border-color:var(--stop);color:var(--stop);font-weight:600}
+  .b-live:hover{background:var(--stop-dim)}
+  .b-live:disabled{border-color:var(--line);color:var(--dim)}
+
+  /* console / output */
+  #out .body{padding:0}
+  .out-head{display:flex;align-items:center;gap:8px;padding:11px 16px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+  .console{font-family:var(--mono);font-size:12.5px;padding:14px 16px;max-height:70vh;overflow:auto;white-space:normal}
+  .console:empty::after{content:"awaiting command — start with DISCOVER or PRE-FLIGHT";color:var(--dim);font-size:11.5px;letter-spacing:.05em}
+  .log{margin:0 0 4px;padding:6px 0;border-bottom:1px dotted #1f242c}
+  .tag{display:inline-block;font-size:9.5px;letter-spacing:.08em;padding:2px 6px;border-radius:2px;margin-right:8px;border:1px solid var(--line)}
+  .t-ok{color:var(--go);border-color:var(--go-dim)}
+  .t-warn{color:var(--amber);border-color:var(--amber-dim)}
+  .t-err{color:var(--stop);border-color:var(--stop-dim)}
+  .t-dry{color:var(--info);border-color:#2c4850}
+  .card{border:1px solid var(--line);border-radius:3px;padding:10px 12px;margin:8px 0;background:var(--panel-2)}
+  .card.warn{border-color:var(--amber-dim);background:#1e1808}
+  .card.bad{border-color:var(--stop-dim);background:#1e0f0d}
+  .card .sku{font-weight:600;color:var(--txt)}
+  .kv{color:var(--muted)}
+  .kv b{color:var(--txt);font-weight:500}
+  .warnmsg{color:var(--amber);margin-top:6px;font-size:11.5px}
+  .errmsg{color:var(--stop)}
+  .spin{display:inline-block;width:11px;height:11px;border:2px solid var(--line);border-top-color:var(--amber);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:7px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .foot{max-width:1160px;margin:0 auto;padding:8px 26px 30px;color:var(--dim);font-family:var(--mono);font-size:10.5px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="mark">FBA·<b>VARIATION</b>·BUILDER</span>
+    <span class="ver" id="ver">v1.2</span>
+  </div>
+  <div class="pills">
+    <span class="pill" id="seller">seller —</span>
+    <span class="pill" id="mkt">mkt —</span>
+    <span class="pill live">LIVE SYSTEM</span>
+  </div>
+</header>
+
+<div style="max-width:1160px;margin:22px auto 0;padding:0 26px">
+  <section class="panel">
+    <h2><span class="n">0</span> Families</h2>
+    <div class="body">
+      <div class="actions" style="margin-top:0;align-items:center">
+        <button class="act b-info" id="btnFamilies">Load all families</button>
+        <span class="hint" id="famHint" style="align-self:center;margin-top:0"></span>
+      </div>
+      <div id="famList" style="margin-top:14px"></div>
+    </div>
+  </section>
+</div>
+
+<main>
+  <!-- LEFT: definition -->
+  <section class="panel">
+    <h2><span class="n">1</span> Family definition</h2>
+    <div class="body">
+      <div class="row2">
+        <div class="field">
+          <label class="lbl">Parent SKU</label>
+          <input type="text" id="parentSku" placeholder="TLB-019-CT" autocomplete="off">
+        </div>
+        <div class="field">
+          <label class="lbl">Variation theme</label>
+          <input type="text" id="theme" value="SIZE" autocomplete="off" list="themeList">
+          <datalist id="themeList"></datalist>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label class="lbl">Donor SKU (the complete child)</label>
+          <input type="text" id="donorSku" placeholder="TLB-019-CT-S" autocomplete="off">
+          <div class="hint">Parent attributes are cloned from this listing.</div>
+        </div>
+        <div class="field">
+          <label class="lbl">Country of origin</label>
+          <input type="text" id="coo" value="CN" autocomplete="off">
+          <div class="hint">Required on the parent (err 90220 otherwise).</div>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label class="lbl">Condition type</label>
+          <input type="text" id="cond" value="new_new" autocomplete="off">
+        </div>
+        <div class="field">
+          <label class="lbl">Parent title <span style="color:var(--dim)">(blank = clone donor)</span></label>
+          <input type="text" id="parentTitle" placeholder="(clone from donor)" autocomplete="off">
+        </div>
+      </div>
+
+      <label class="lbl" style="display:block;margin:18px 0 6px">Children</label>
+      <table class="children">
+        <thead><tr><th>Child SKU</th><th>ASIN</th><th>Theme value</th><th>Price (USD)</th><th></th></tr></thead>
+        <tbody id="kids"></tbody>
+      </table>
+      <button class="add" id="addKid">+ add child</button>
+
+      <div class="actions" style="margin-top:20px">
+        <button class="act b-info" id="btnDiscover">Discover type + themes</button>
+        <button class="act b-info" id="btnPreflight">Pre-flight check</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: execute + console -->
+  <div style="display:grid;gap:22px">
+    <section class="panel">
+      <h2><span class="n">2</span> Execute</h2>
+      <div class="body">
+        <p class="hint" style="margin-top:0">Always pre-flight, then dry-run. The live build stays locked until a dry-run succeeds.</p>
+        <div class="actions">
+          <button class="act b-go" id="btnDry">Dry-run</button>
+          <button class="act b-live" id="btnBuild" disabled>● Build (live)</button>
+          <button class="act b-info" id="btnStatus">Status</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="n">2b</span> Modify existing family</h2>
+      <div class="body">
+        <p class="hint" style="margin-top:0">Uses the Parent SKU, Theme and Children rows above. <b>Add</b> attaches each child row to the parent. <b>Remove</b> detaches each child SKU from the parent (listing &amp; inventory are kept).</p>
+        <div class="field">
+          <label class="lbl">Action</label>
+          <select id="modAction">
+            <option value="add">Add children to parent</option>
+            <option value="remove">Remove children from parent</option>
+          </select>
+        </div>
+        <div class="actions">
+          <button class="act b-go" id="btnModDry">Dry-run modify</button>
+          <button class="act b-live" id="btnModApply" disabled>● Apply modify (live)</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="out">
+      <h2><span class="n">3</span> Console</h2>
+      <div class="body">
+        <div class="out-head"><span id="outState">idle</span></div>
+        <div class="console" id="console"></div>
+      </div>
+    </section>
+  </div>
+</main>
+<div class="foot">31337 LLC · SP-API listings/2021-08-01 · dry-run is the default · nothing is sent to Amazon without an explicit live build</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let dryRunOK = false;
+
+// ---------- child rows ----------
+const seed = [
+  {sku:"",asin:"",size:"",price:""},
+  {sku:"",asin:"",size:"",price:""},
+];
+function kidRow(k={}){
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+    <td><input type="text" class="c-sku" value="${k.sku||""}" placeholder="SKU" autocomplete="off"></td>
+    <td><input type="text" class="c-asin" value="${k.asin||""}" placeholder="ASIN" autocomplete="off"></td>
+    <td><input type="text" class="c-size" value="${k.size||""}" placeholder="Left" autocomplete="off"></td>
+    <td><input type="number" step="0.01" class="c-price" value="${k.price??""}" placeholder="31.99"></td>
+    <td><button class="rm" title="remove">×</button></td>`;
+  tr.querySelector(".rm").onclick=()=>tr.remove();
+  return tr;
+}
+function readKids(){
+  return [...$("kids").children].map(tr=>({
+    sku:tr.querySelector(".c-sku").value.trim(),
+    asin:tr.querySelector(".c-asin").value.trim(),
+    size:tr.querySelector(".c-size").value.trim(),
+    price:tr.querySelector(".c-price").value===""?null:parseFloat(tr.querySelector(".c-price").value),
+  })).filter(k=>k.sku);
+}
+seed.forEach(k=>$("kids").appendChild(kidRow(k)));
+$("addKid").onclick=()=>$("kids").appendChild(kidRow());
+
+// ---------- console ----------
+const con=$("console");
+function clearOut(state){con.innerHTML="";$("outState").textContent=state||"…";}
+function busy(msg){$("outState").innerHTML=`<span class="spin"></span>${msg}`;}
+function done(state){$("outState").textContent=state;}
+function line(html){const d=document.createElement("div");d.className="log";d.innerHTML=html;con.appendChild(d);}
+function card(html,cls=""){const d=document.createElement("div");d.className="card "+cls;d.innerHTML=html;con.appendChild(d);}
+function esc(s){return String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+
+async function api(path,body){
+  const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const j=await r.json();
+  if(!r.ok) throw new Error(j.error||("HTTP "+r.status));
+  return j;
+}
+function gather(){
+  return {
+    parentSku:$("parentSku").value.trim(),
+    theme:$("theme").value.trim(),
+    donorSku:$("donorSku").value.trim(),
+    countryOfOrigin:$("coo").value.trim(),
+    conditionType:$("cond").value.trim(),
+    parentTitle:$("parentTitle").value.trim(),
+    children:readKids(),
+  };
+}
+
+// ---------- health ----------
+(async()=>{
+  try{const h=await fetch("/api/health").then(r=>r.json());
+    $("seller").innerHTML="seller <b>"+esc(h.sellerId)+"</b>";
+    $("mkt").innerHTML="mkt <b>"+esc(h.marketplace)+"</b>";
+  }catch{}
+})();
+
+// ---------- discover ----------
+$("btnDiscover").onclick=async()=>{
+  const kids=readKids();
+  const asin=(kids.find(k=>k.sku===$("donorSku").value.trim())||kids[0]||{}).asin;
+  if(!asin){clearOut("error");card("Enter at least one child ASIN (ideally the donor) first.","bad");return;}
+  clearOut("discovering");busy("querying catalog + product type");
+  try{
+    const d=await api("/api/discover",{asin});
+    done("discovered");
+    line(`<span class="tag t-ok">TYPE</span> product type = <b class="mono">${esc(d.productType)}</b>`);
+    if(d.themes?.length){
+      $("themeList").innerHTML=d.themes.map(t=>`<option value="${esc(t)}">`).join("");
+      const ok=d.themes.includes($("theme").value.trim());
+      line(`<span class="tag ${ok?"t-ok":"t-warn"}">THEMES</span> ${d.themes.map(esc).join(", ")}`);
+      line(ok?`<span class="kv">"${esc($("theme").value.trim())}" is valid for this type.</span>`
+            :`<span class="warnmsg">Current theme "${esc($("theme").value.trim())}" is NOT in the valid list — pick one above.</span>`);
+    }else{
+      line(`<span class="tag t-warn">THEMES</span> <span class="kv">could not read theme enum; proceeding on trust.</span>`);
+    }
+  }catch(e){done("error");card(esc(e.message),"bad");}
+};
+
+// ---------- preflight ----------
+$("btnPreflight").onclick=async()=>{
+  const g=gather();
+  const skus=[g.parentSku,...g.children.map(k=>k.sku)].filter(Boolean);
+  if(!skus.length){clearOut("error");card("Add a parent and/or child SKUs first.","bad");return;}
+  clearOut("pre-flight");busy("probing SKUs, twins + FBA inventory");
+  try{
+    const {rows}=await api("/api/preflight",{skus});
+    done("pre-flight complete");
+    let warned=false;
+    for(const r of rows){
+      const cls=r.twinWarning?"warn":(r.exists?"":"bad");
+      if(r.twinWarning)warned=true;
+      let h=`<div class="sku">${esc(r.sku)} ${r.exists?`<span class="kv">· ${esc(r.status)}</span>`:`<span class="errmsg">· NOT FOUND</span>`}</div>`;
+      if(r.exists){
+        h+=`<div class="kv">asin <b>${esc(r.asin||"—")}</b> · fba units <b>${r.units??"—"}</b>`;
+        if(r.childOf?.length)h+=` · child of <b>${esc(r.childOf.join(", "))}</b>`;
+        if(r.parentOf?.length)h+=` · parent of <b>${r.parentOf.length}</b>`;
+        h+=`</div>`;
+      }
+      if(r.twinWarning)h+=`<div class="warnmsg">⚠ ${esc(r.twinWarning)}</div>`;
+      (r.issues||[]).forEach(i=>h+=`<div class="${i.severity==="ERROR"?"errmsg":"kv"}">[${esc(i.severity)}] ${esc(i.code)} — ${esc(i.message)}</div>`);
+      card(h,cls);
+    }
+    if(warned)line(`<span class="tag t-warn">REVIEW</span> Resolve the twin-SKU warnings above before building.`);
+    else line(`<span class="tag t-ok">CLEAR</span> No trailing-period twins detected.`);
+  }catch(e){done("error");card(esc(e.message),"bad");}
+};
+
+// ---------- dry-run ----------
+$("btnDry").onclick=async()=>{
+  const g=gather();
+  if(!validate(g))return;
+  clearOut("dry-run");busy("composing requests (sending nothing)");
+  try{
+    const res=await api("/api/build",{...g,commit:false});
+    done("dry-run complete");
+    line(`<span class="tag t-dry">DRY</span> product type <b>${esc(res.productType)}</b> · theme <b>${esc(res.theme)}</b>`);
+    res.log.forEach(renderLog);
+    dryRunOK=true;$("btnBuild").disabled=false;
+    line(`<span class="tag t-ok">READY</span> Dry-run clean. Live build unlocked.`);
+  }catch(e){done("error");card(esc(e.message),"bad");dryRunOK=false;$("btnBuild").disabled=true;}
+};
+
+// ---------- build (live) ----------
+$("btnBuild").onclick=async()=>{
+  const g=gather();
+  if(!validate(g))return;
+  if(!dryRunOK){card("Run a dry-run first.","warn");return;}
+  if(!confirm(`LIVE BUILD\n\nParent: ${g.parentSku}\nChildren: ${g.children.map(k=>k.sku).join(", ")}\n\nThis writes to live Amazon listings. Proceed?`))return;
+  clearOut("building (live)");busy("writing to Amazon");
+  try{
+    const res=await api("/api/build",{...g,commit:true});
+    done("build submitted");
+    res.log.forEach(renderLog);
+    line(`<span class="tag t-ok">SENT</span> Submitted. Variation propagation can take minutes to hours.`);
+    dryRunOK=false;$("btnBuild").disabled=true;
+  }catch(e){done("error");card(esc(e.message),"bad");}
+};
+
+// ---------- status ----------
+$("btnStatus").onclick=async()=>{
+  const parentSku=$("parentSku").value.trim();
+  const childSkus=readKids().map(k=>k.sku);
+  if(!parentSku){clearOut("error");card("Enter the parent SKU to inspect.","bad");return;}
+  clearOut("status");busy("reading family tree");
+  try{
+    const {rows}=await api("/api/status",{parentSku,childSkus});
+    done("status");
+    for(const r of rows){
+      if(!r.exists){card(`<div class="sku">${esc(r.sku)}</div><div class="errmsg">not found — ${esc(r.error||"")}</div>`,"bad");continue;}
+      let h=`<div class="sku">${esc(r.sku)} <span class="kv">· ${esc(r.status)}</span></div>`;
+      h+=`<div class="kv">asin <b>${esc(r.asin||"—")}</b>`;
+      if(r.parentOf?.length)h+=` · parent of <b>${r.parentOf.length}</b>: ${esc(r.parentOf.join(", "))}`;
+      if(r.childOf?.length)h+=` · child of <b>${esc(r.childOf.join(", "))}</b>`;
+      h+=`</div>`;
+      const bad=(r.issues||[]).some(i=>i.severity==="ERROR");
+      (r.issues||[]).forEach(i=>h+=`<div class="${i.severity==="ERROR"?"errmsg":"kv"}">[${esc(i.severity)}] ${esc(i.code)} — ${esc(i.message)}</div>`);
+      if(!r.issues?.length)h+=`<div class="kv" style="color:var(--go)">no issues</div>`;
+      card(h,bad?"bad":"");
+    }
+  }catch(e){done("error");card(esc(e.message),"bad");}
+};
+
+// ---------- helpers ----------
+function renderLog(l){
+  if(l.step==="parent"){
+    if(l.dryRun)card(`<span class="tag t-dry">PARENT</span> <span class="sku">${esc(l.sku)}</span><div class="kv">would PUT · attrs: ${esc((l.attributeKeys||[]).join(", "))}</div>`);
+    else statusCard("PARENT",l);
+  }else{
+    if(l.note&&!l.size){card(`<span class="tag t-dry">CHILD</span> <span class="sku">${esc(l.sku)}</span> <span class="kv">${esc(l.note)}</span>`);return;}
+    if(l.dryRun)card(`<span class="tag t-dry">CHILD</span> <span class="sku">${esc(l.sku)}</span><div class="kv">size "${esc(l.size)}" · $${esc(l.price)} · ${esc(l.note||"")}</div>`);
+    else statusCard("CHILD",l);
+  }
+}
+function statusCard(kind,l){
+  const errs=(l.issues||[]).filter(i=>i.severity==="ERROR");
+  const tag=errs.length?"t-err":"t-ok";
+  let h=`<span class="tag ${tag}">${kind}</span> <span class="sku">${esc(l.sku)}</span> <span class="kv">· ${esc(l.status||"accepted")}</span>`;
+  (l.issues||[]).forEach(i=>h+=`<div class="${i.severity==="ERROR"?"errmsg":"kv"}">[${esc(i.severity)}] ${esc(i.code)} — ${esc(i.message)}</div>`);
+  card(h,errs.length?"bad":"");
+}
+function validate(g){
+  if(!g.parentSku){clearOut("error");card("Parent SKU is required.","bad");return false;}
+  if(!g.donorSku){clearOut("error");card("Donor SKU is required (the complete child to clone the parent from).","bad");return false;}
+  if(!g.theme){clearOut("error");card("Variation theme is required.","bad");return false;}
+  if(!g.children.length){clearOut("error");card("Add at least one child.","bad");return false;}
+  const priced=g.children.filter(k=>k.sku!==g.donorSku);
+  for(const k of priced){if(!k.asin||!k.size||k.price==null){clearOut("error");card(`Child ${esc(k.sku)} needs ASIN, theme value and price.`,"bad");return false;}}
+  return true;
+}
+// ---------- modify family (add / remove children) ----------
+let modDryOK=false;
+function modValidate(action,g){
+  if(!g.parentSku){clearOut("error");card("Parent SKU is required.","bad");return false;}
+  if(!g.children.length){clearOut("error");card("Add at least one child row.","bad");return false;}
+  if(action==="add"){
+    if(!g.theme){clearOut("error");card("Theme is required to add children.","bad");return false;}
+    for(const k of g.children){if(!k.size){clearOut("error");card(`Child ${esc(k.sku)} needs a theme value to add.`,"bad");return false;}}
+  }
+  return true;
+}
+function renderMod(l,action){
+  if(l.error){card(`<span class="sku">${esc(l.sku)}</span> <span class="errmsg">${esc(l.error)}</span>`,"bad");return;}
+  const a=(l.action||action).toUpperCase();
+  if(l.dryRun){card(`<span class="tag t-dry">${esc(a)}</span> <span class="sku">${esc(l.sku)}</span><div class="kv">${esc((l.patches||[]).join(" · "))}</div>`);return;}
+  const errs=(l.issues||[]).filter(i=>i.severity==="ERROR");
+  let h=`<span class="tag ${errs.length?"t-err":"t-ok"}">${esc(a)}</span> <span class="sku">${esc(l.sku)}</span> <span class="kv">· ${esc(l.status||"accepted")}</span>`;
+  (l.issues||[]).forEach(i=>h+=`<div class="${i.severity==="ERROR"?"errmsg":"kv"}">[${esc(i.severity)}] ${esc(i.code)} — ${esc(i.message)}</div>`);
+  card(h,errs.length?"bad":"");
+}
+$("btnModDry").onclick=async()=>{
+  const action=$("modAction").value, g=gather();
+  if(!modValidate(action,g))return;
+  clearOut(action+" dry-run");busy("composing "+action+" (sending nothing)");
+  try{
+    const res=await api("/api/modify",{action,parentSku:g.parentSku,theme:g.theme,children:g.children,commit:false});
+    done(action+" dry-run complete");
+    line(`<span class="tag t-dry">${action.toUpperCase()}</span> parent <b>${esc(res.parentSku)}</b>${action==="add"?` · theme <b>${esc(res.theme)}</b>`:""}`);
+    res.log.forEach(l=>renderMod(l,action));
+    modDryOK=true;$("btnModApply").disabled=false;
+    line(`<span class="tag t-ok">READY</span> Dry-run clean. Apply unlocked.`);
+  }catch(e){done("error");card(esc(e.message),"bad");modDryOK=false;$("btnModApply").disabled=true;}
+};
+$("btnModApply").onclick=async()=>{
+  if(!modDryOK){card("Run a dry-run first.","warn");return;}
+  const action=$("modAction").value, g=gather();
+  if(!modValidate(action,g))return;
+  const verb=action==="add"?"ADD to":"REMOVE from";
+  if(!confirm(`${action.toUpperCase()}\n\n${verb} parent ${g.parentSku}:\n${g.children.map(k=>k.sku).join(", ")}\n\nThis writes to live Amazon listings. Proceed?`))return;
+  clearOut(action+" (live)");busy("writing to Amazon");
+  try{
+    const res=await api("/api/modify",{action,parentSku:g.parentSku,theme:g.theme,children:g.children,commit:true});
+    done(action+" submitted");
+    res.log.forEach(l=>renderMod(l,action));
+    line(`<span class="tag t-ok">SENT</span> Submitted. Run Status to confirm the tree.`);
+    modDryOK=false;$("btnModApply").disabled=true;
+  }catch(e){done("error");card(esc(e.message),"bad");}
+};
+document.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",()=>{if(modDryOK){modDryOK=false;$("btnModApply").disabled=true;}}));
+$("kids").addEventListener("input",()=>{if(modDryOK){modDryOK=false;$("btnModApply").disabled=true;}});
+
+// ---------- families browser ----------
+function loadFamily(f){
+  $("parentSku").value=f.parentSku;
+  if(f.theme) $("theme").value=f.theme;
+  $("donorSku").value="";
+  $("kids").innerHTML="";
+  (f.childSkus||[]).forEach(sku=>$("kids").appendChild(kidRow({sku})));
+  window.scrollTo({top:0,behavior:"smooth"});
+  clearOut("loaded");
+  line(`<span class="tag t-ok">LOADED</span> Family <b>${esc(f.parentSku)}</b> — ${f.childCount} children · theme ${esc(f.theme||"?")}. Run <b>Status</b> for the live tree, or use <b>Modify</b> to add/remove.`);
+}
+$("btnFamilies").onclick=async()=>{
+  $("btnFamilies").disabled=true; $("famHint").textContent="scanning all listings (~20s)…"; $("famList").innerHTML="";
+  try{
+    const r=await fetch("/api/families");
+    const j=await r.json();
+    if(!r.ok) throw new Error(j.error||("HTTP "+r.status));
+    const fams=j.families||[];
+    $("famHint").textContent=fams.length+" parent"+(fams.length===1?"":"s")+" found";
+    if(!fams.length){$("famList").innerHTML='<div class="kv" style="padding:6px 0">No variation parents found.</div>';return;}
+    fams.forEach((f,i)=>{
+      const d=document.createElement("div"); d.className="card";
+      d.innerHTML=`<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+        <div style="min-width:0">
+          <div><span class="sku">${esc(f.parentSku)}</span>
+            <span class="tag t-dry" style="margin-left:8px">${esc(f.theme||"?")}</span>
+            <span class="kv"> · ${f.childCount} children</span></div>
+          <div class="kv">asin ${esc(f.asin||"—")}${f.status?" · "+esc(f.status):""}</div>
+          <div class="kv" style="font-size:11px;color:var(--dim)">${(f.childSkus||[]).map(esc).join("  ·  ")}</div>
+        </div>
+        <button class="act b-info famEdit" data-i="${i}" style="white-space:nowrap">Edit children →</button>
+      </div>`;
+      $("famList").appendChild(d);
+    });
+    document.querySelectorAll(".famEdit").forEach(b=>b.onclick=()=>loadFamily(fams[+b.dataset.i]));
+  }catch(e){$("famHint").textContent="";$("famList").innerHTML='<div class="errmsg" style="padding:6px 0">'+esc(e.message)+'</div>';}
+  finally{$("btnFamilies").disabled=false;}
+};
+
+// invalidate dry-run if the definition changes
+document.querySelectorAll("input").forEach(el=>el.addEventListener("input",()=>{if(dryRunOK){dryRunOK=false;$("btnBuild").disabled=true;}}));
+$("kids").addEventListener("input",()=>{if(dryRunOK){dryRunOK=false;$("btnBuild").disabled=true;}});
+</script>
+</body>
+</html>
