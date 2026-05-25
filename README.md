@@ -64,3 +64,10 @@ nginx: /etc/nginx/sites-available/variations.flechanegra.co -> :3008. SSL via ce
 - v1.0 - build a family (discover, preflight, dry-run, build, status)
 - v1.1 - add/remove children on an existing parent (/api/modify)
 - v1.2 - families browser (/api/families) + Edit-children loader
+
+## Listing Editor (second page: /editor.html)
+A general single-listing editor served by the same app (shares auth, SP-API, search index).
+- Search by ASIN / SKU / partial SKU -> pick an item -> see ALL attributes -> edit any/several -> Review (diff) -> Submit to Amazon (confirm-gated).
+- Image preview strip (MAIN + PT1-8) from each attribute's media_location, click to enlarge (lightbox).
+- Endpoints: GET /api/find?q= (flat item search), GET /api/item?sku= (full attributes), POST /api/update {sku,patches,commit} (diff-based; dry-run default).
+- Only changed attributes are sent (op:add upsert; emptied simple field -> op:delete). Review validates structure, not values (value errors surface on Submit).
