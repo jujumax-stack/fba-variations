@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Listing Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0c0d10; --panel:#14161c; --panel-2:#181b22; --line:#262a33;
+    --txt:#dde2e9; --muted:#828d9c; --dim:#5a6473;
+    --amber:#ffb02e; --amber-dim:#7a5614;
+    --go:#46d17f; --go-dim:#16321f;
+    --stop:#ff5d52; --stop-dim:#3a1714; --info:#5fc9d8;
+    --mono:'IBM Plex Mono',ui-monospace,monospace; --sans:'IBM Plex Sans',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:14px;line-height:1.5}
+  body{background-image:linear-gradient(rgba(255,255,255,.015) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.015) 1px,transparent 1px);background-size:32px 32px;min-height:100vh}
+  a{color:var(--info);text-decoration:none}
+  .mono{font-family:var(--mono)}
+  .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:18px;padding:14px 26px;background:rgba(12,13,16,.86);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:baseline;gap:11px}
+  .brand .mark{font-family:var(--mono);font-weight:600;letter-spacing:.04em;font-size:16px}
+  .brand .mark b{color:var(--amber)}
+  .brand .ver{font-family:var(--mono);font-size:10px;color:var(--dim)}
+  .nav{margin-left:auto;display:flex;gap:14px;align-items:center}
+  .nav a{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--muted);padding:6px 10px;border:1px solid var(--line);border-radius:3px}
+  .nav a.active{color:var(--amber);border-color:var(--amber-dim)}
+  .pill{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;padding:5px 10px;border:1px solid var(--stop-dim);border-radius:2px;color:var(--stop)}
+  .pill::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--stop);margin-right:7px;vertical-align:middle;animation:blink 1.6s steps(2,end) infinite}
+  @keyframes blink{50%{opacity:.25}}
+  main{max-width:1080px;margin:0 auto;padding:26px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:4px;margin-bottom:22px}
+  .panel>h2{margin:0;padding:13px 18px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--amber);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
+  .panel>h2 .n{color:var(--dim);border:1px solid var(--line);border-radius:2px;width:18px;height:18px;display:inline-grid;place-items:center;font-size:10px}
+  .body{padding:18px}
+  input[type=text],textarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-family:var(--mono);font-size:13px;padding:9px 11px;border-radius:3px;outline:none}
+  textarea{resize:vertical;min-height:62px;line-height:1.5}
+  input:focus,textarea:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(255,176,46,.12)}
+  .hint{font-size:11.5px;color:var(--dim);margin-top:5px}
+  button.act{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;padding:11px 16px;border-radius:3px;cursor:pointer;border:1px solid var(--line);background:var(--panel-2);color:var(--txt);transition:.12s}
+  button.act:hover{border-color:var(--muted)}
+  button.act:disabled{opacity:.4;cursor:not-allowed}
+  .b-info{border-color:#2c4850;color:var(--info)} .b-info:hover{background:#0f2024}
+  .b-go{border-color:var(--go-dim);color:var(--go)} .b-go:hover{background:var(--go-dim)}
+  .b-live{border-color:var(--stop);color:var(--stop);font-weight:600} .b-live:hover{background:var(--stop-dim)} .b-live:disabled{border-color:var(--line);color:var(--dim)}
+  .actions{display:flex;flex-wrap:wrap;gap:10px}
+  .card{border:1px solid var(--line);border-radius:3px;padding:10px 12px;margin:8px 0;background:var(--panel-2)}
+  .card.warn{border-color:var(--amber-dim);background:#1e1808}
+  .card.bad{border-color:var(--stop-dim);background:#1e0f0d}
+  .sku{font-weight:600;color:var(--txt)} .kv{color:var(--muted)} .kv b{color:var(--txt);font-weight:500}
+  .errmsg{color:var(--stop)} .warnmsg{color:var(--amber)}
+  .tag{display:inline-block;font-size:9.5px;letter-spacing:.08em;padding:2px 6px;border-radius:2px;margin-right:8px;border:1px solid var(--line)}
+  .t-ok{color:var(--go);border-color:var(--go-dim)} .t-dry{color:var(--info);border-color:#2c4850} .t-err{color:var(--stop);border-color:var(--stop-dim)} .t-warn{color:var(--amber);border-color:var(--amber-dim)}
+  .spin{display:inline-block;width:11px;height:11px;border:2px solid var(--line);border-top-color:var(--amber);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:7px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .attr{border:1px solid var(--line);border-radius:4px;margin:10px 0;background:var(--panel-2)}
+  .attr.changed{border-color:var(--amber-dim)}
+  .attr-h{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line)}
+  .attr-h .name{font-family:var(--mono);font-size:12px;color:var(--txt);font-weight:500}
+  .attr-h .meta{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:auto}
+  .attr-b{padding:10px 12px;display:flex;flex-direction:column;gap:7px}
+  .chg-dot{width:7px;height:7px;border-radius:50%;background:var(--amber);display:none}
+  .attr.changed .chg-dot{display:inline-block}
+  .jsonwrap label{font-size:10px;color:var(--dim);font-family:var(--mono)}
+  #attrSearch{margin-bottom:10px}
+  .thumb{position:relative;width:84px;height:84px;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#0a0b0e;cursor:zoom-in}
+  .thumb img{width:100%;height:100%;object-fit:contain;display:block}
+  .thumb .tg{position:absolute;left:0;top:0;font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;background:rgba(12,13,16,.82);color:var(--amber);padding:1px 4px;border-bottom-right-radius:3px}
+  .thumb.main{border-color:var(--amber-dim)}
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:50;cursor:zoom-out}
+  .lightbox img{max-width:88vw;max-height:88vh;border:1px solid var(--line);border-radius:4px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark">LISTING·<b>EDITOR</b></span><span class="ver">v1.1</span></div>
+  <div class="nav">
+    <a href="/">Variation Builder</a>
+    <a href="/editor.html" class="active">Listing Editor</a>
+    <span class="pill">LIVE SYSTEM</span>
+  </div>
+</header>
+<main>
+  <section class="panel">
+    <h2><span class="n">1</span> Find a listing</h2>
+    <div class="body">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <input type="text" id="q" placeholder="Search by ASIN, SKU, or partial SKU…" autocomplete="off" style="flex:1;min-width:240px">
+        <button class="act b-info" id="btnFind">Search</button>
+      </div>
+      <span class="hint" id="findHint"></span>
+      <div id="results" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="editorPanel" style="display:none">
+    <h2><span class="n">2</span> Edit fields <span id="editSku" class="mono" style="color:var(--txt);text-transform:none;letter-spacing:0;margin-left:6px"></span></h2>
+    <div class="body">
+      <div id="itemMeta" class="kv" style="margin-bottom:12px"></div>
+      <div id="imgStrip" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
+      <input type="text" id="attrSearch" placeholder="filter fields by name…" autocomplete="off">
+      <div id="fields"></div>
+      <div class="actions" style="margin-top:16px">
+        <button class="act b-go" id="btnReview">Review changes</button>
+        <button class="act b-live" id="btnSubmit" disabled>● Submit to Amazon (live)</button>
+        <button class="act" id="btnReload">Reload from Amazon</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="out" style="display:none">
+    <h2><span class="n">3</span> Console</h2>
+    <div class="body" style="padding:0">
+      <div style="padding:11px 16px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)"><span id="outState">idle</span></div>
+      <div id="console" style="font-family:var(--mono);font-size:12.5px;padding:14px 16px;max-height:60vh;overflow:auto"></div>
+    </div>
+  </section>
+  <div class="lightbox" id="lightbox" onclick="this.style.display='none'"><img id="lightboxImg" src="" alt=""></div>
+</main>
+<script>
+const $=(id)=>document.getElementById(id);
+const esc=(s)=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let CURRENT=null;       // {sku, productType, attributes}
+let reviewed=false, lastPatches=[];
+
+// ---------- console ----------
+const con=$("console");
+function showConsole(){$("out").style.display="";}
+function clearOut(state){showConsole();con.innerHTML="";$("outState").textContent=state||"…";}
+function busy(m){$("outState").innerHTML=`<span class="spin"></span>${m}`;}
+function done(m){$("outState").textContent=m;}
+function line(h){const d=document.createElement("div");d.style.padding="6px 0";d.style.borderBottom="1px dotted #1f242c";d.innerHTML=h;con.appendChild(d);}
+function card(h,cls=""){const d=document.createElement("div");d.className="card "+cls;d.innerHTML=h;con.appendChild(d);}
+
+async function api(method,path,body){
+  const o={method,headers:{}};
+  if(body){o.headers["Content-Type"]="application/json";o.body=JSON.stringify(body);}
+  const r=await fetch(path,o);
+  const j=await r.json();
+  if(!r.ok) throw new Error(j.error||("HTTP "+r.status));
+  return j;
+}
+
+// ---------- search ----------
+async function find(){
+  const q=$("q").value.trim();
+  if(!q){$("findHint").textContent="Type an ASIN, SKU, or partial SKU.";return;}
+  $("btnFind").disabled=true;$("findHint").textContent="searching…";$("results").innerHTML="";
+  try{
+    const d=await api("GET","/api/find?q="+encodeURIComponent(q));
+    $("findHint").textContent=d.items.length+" item(s) · scanned "+d.scanned;
+    if(!d.items.length){$("results").innerHTML='<div class="kv" style="padding:6px 0">No SKU or ASIN matched.</div>';return;}
+    d.items.forEach((it,i)=>{
+      const row=document.createElement("div");row.className="card";
+      row.innerHTML=`<div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
+        <div><span class="sku">${esc(it.sku)}</span> <span class="tag t-dry" style="margin-left:6px">${esc(it.role)}</span>
+          <div class="kv" style="font-size:12px">asin ${esc(it.asin||"—")}${it.status?" · "+esc(it.status):""}</div></div>
+        <button class="act b-info pick" data-sku="${esc(it.sku)}" style="white-space:nowrap">Edit →</button></div>`;
+      $("results").appendChild(row);
+    });
+    document.querySelectorAll(".pick").forEach(b=>b.onclick=()=>loadItem(b.dataset.sku));
+  }catch(e){$("findHint").textContent="";$("results").innerHTML='<div class="errmsg" style="padding:6px 0">'+esc(e.message)+'</div>';}
+  finally{$("btnFind").disabled=false;}
+}
+$("btnFind").onclick=find;
+$("q").addEventListener("keydown",e=>{if(e.key==="Enter")find();});
+
+// ---------- load item + render fields ----------
+async function loadItem(sku){
+  clearOut("loading "+sku);busy("fetching listing attributes");
+  try{
+    const d=await api("GET","/api/item?sku="+encodeURIComponent(sku));
+    CURRENT=d;
+    $("editSku").textContent=" — "+sku;
+    $("itemMeta").innerHTML=`asin <b>${esc(d.asin||"—")}</b> · type <b>${esc(d.productType||"?")}</b> · status <b>${esc(d.status||"?")}</b> · <b>${Object.keys(d.attributes||{}).length}</b> attributes`;
+    renderImages(d.attributes||{});
+    renderFields(d.attributes||{});
+    $("editorPanel").style.display="";
+    reviewed=false;$("btnSubmit").disabled=true;
+    done("loaded "+sku);line(`<span class="tag t-ok">LOADED</span> ${esc(sku)} — edit any fields, then Review changes.`);
+    $("editorPanel").scrollIntoView({behavior:"smooth"});
+  }catch(e){done("error");card(esc(e.message),"bad");}
+}
+
+// an entry is "simple" if it's an object carrying a scalar `value`
+function isSimpleEntry(e){return e&&typeof e==="object"&&!Array.isArray(e)&&"value"in e&&(typeof e.value!=="object"||e.value===null);}
+function attrIsSimple(val){return Array.isArray(val)&&val.length>0&&val.every(isSimpleEntry);}
+
+function imgUrl(attr){ return (attr && attr[0] && attr[0].media_location) ? attr[0].media_location : null; }
+function renderImages(attrs){
+  const strip=$("imgStrip"); strip.innerHTML="";
+  const slots=[["MAIN","main_product_image_locator"]];
+  for(let i=1;i<=8;i++) slots.push(["PT"+i,"other_product_image_locator_"+i]);
+  let n=0;
+  slots.forEach(([labelTxt,key])=>{
+    const url=imgUrl(attrs[key]);
+    if(!url) return;
+    n++;
+    const d=document.createElement("div");
+    d.className="thumb"+(key==="main_product_image_locator"?" main":"");
+    d.title=key+" — click to enlarge";
+    d.innerHTML=`<span class="tg">${labelTxt}</span><img loading="lazy" src="${esc(url)}" alt="${esc(labelTxt)}" onerror="this.parentElement.style.opacity=.3;this.parentElement.title='image failed to load';">`;
+    d.onclick=()=>{ $("lightboxImg").src=url; $("lightbox").style.display="flex"; };
+    strip.appendChild(d);
+  });
+  if(!n){ strip.innerHTML='<div class="kv" style="font-size:12px">No image URLs on this listing.</div>'; }
+}
+function renderFields(attrs){
+  const wrap=$("fields");wrap.innerHTML="";
+  Object.keys(attrs).sort().forEach(key=>{
+    const val=attrs[key];
+    const simple=attrIsSimple(val);
+    const div=document.createElement("div");div.className="attr";div.dataset.key=key;div.dataset.kind=simple?"simple":"json";
+    let inner="";
+    if(simple){
+      inner=val.map((e,i)=>`<input type="text" class="fv" data-i="${i}" value="${esc(e.value)}">`).join("");
+    }else{
+      inner=`<div class="jsonwrap"><label>JSON value</label><textarea class="fj" spellcheck="false">${esc(JSON.stringify(val,null,2))}</textarea></div>`;
+    }
+    div.innerHTML=`<div class="attr-h"><span class="chg-dot"></span><span class="name">${esc(key)}</span><span class="meta">${simple?(val.length>1?val.length+" values":"text"):"json"}</span></div><div class="attr-b">${inner}</div>`;
+    wrap.appendChild(div);
+  });
+  // change tracking -> amber border
+  wrap.querySelectorAll("input.fv,textarea.fj").forEach(el=>el.addEventListener("input",()=>{
+    el.closest(".attr").classList.add("changed");
+    if(reviewed){reviewed=false;$("btnSubmit").disabled=true;}
+  }));
+}
+
+// filter fields by name
+$("attrSearch").addEventListener("input",()=>{
+  const t=$("attrSearch").value.trim().toLowerCase();
+  document.querySelectorAll("#fields .attr").forEach(a=>{a.style.display=a.dataset.key.toLowerCase().includes(t)?"":"none";});
+});
+
+// ---------- build diff patches from the form ----------
+function buildPatches(){
+  const patches=[]; const changes=[];
+  document.querySelectorAll("#fields .attr").forEach(div=>{
+    const key=div.dataset.key, orig=CURRENT.attributes[key];
+    let next;
+    if(div.dataset.kind==="simple"){
+      const inputs=[...div.querySelectorAll("input.fv")];
+      next=inputs.map((inp,i)=>{ const e={...orig[i]}; e.value=inp.value; return e; });
+    }else{
+      const ta=div.querySelector("textarea.fj");
+      try{ next=JSON.parse(ta.value); }
+      catch(err){ throw new Error(`"${key}": invalid JSON — ${err.message}`); }
+    }
+    if(JSON.stringify(next)!==JSON.stringify(orig)){
+      const emptied = div.dataset.kind==="simple" && next.every(e=>String(e.value).trim()==="");
+      if(emptied){ patches.push({op:"delete",path:`/attributes/${key}`}); changes.push({key,op:"delete"}); }
+      else { patches.push({op:"add",path:`/attributes/${key}`,value:next}); changes.push({key,op:"add",next,orig}); }
+    }
+  });
+  return {patches,changes};
+}
+
+function renderChange(c){
+  if(c.op==="delete"){card(`<span class="tag t-warn">DELETE</span> <span class="sku">${esc(c.key)}</span> <span class="kv">attribute will be removed</span>`);return;}
+  let preview;
+  try{ preview = JSON.stringify(c.next); }catch{ preview=String(c.next); }
+  if(preview.length>220) preview=preview.slice(0,220)+"…";
+  card(`<span class="tag t-dry">CHANGE</span> <span class="sku">${esc(c.key)}</span><div class="kv" style="margin-top:4px">new: <b>${esc(preview)}</b></div>`);
+}
+
+$("btnReview").onclick=()=>{
+  if(!CURRENT){return;}
+  clearOut("review");
+  let r;
+  try{ r=buildPatches(); }
+  catch(e){ done("error");card(esc(e.message),"bad");return; }
+  if(!r.patches.length){ done("no changes");card("No fields changed.","warn");reviewed=false;$("btnSubmit").disabled=true;return; }
+  done(r.patches.length+" change(s)");
+  line(`<span class="tag t-dry">REVIEW</span> ${r.patches.length} attribute(s) will be sent to Amazon for <b>${esc(CURRENT.sku)}</b>`);
+  r.changes.forEach(renderChange);
+  lastPatches=r.patches; reviewed=true; $("btnSubmit").disabled=false;
+  line(`<span class="tag t-ok">READY</span> Review looks right? Submit unlocks the live write.`);
+};
+
+$("btnSubmit").onclick=async()=>{
+  if(!reviewed||!lastPatches.length){card("Run Review changes first.","warn");return;}
+  if(!confirm(`SUBMIT TO AMAZON\n\n${lastPatches.length} attribute change(s) on ${CURRENT.sku}.\nThis writes to the live listing. Proceed?`))return;
+  clearOut("submitting");busy("writing to Amazon");
+  try{
+    const res=await api("POST","/api/update",{sku:CURRENT.sku,patches:lastPatches,commit:true});
+    const errs=(res.issues||[]).filter(i=>i.severity==="ERROR");
+    done(errs.length?"submitted with errors":"submitted");
+    let h=`<span class="tag ${errs.length?"t-err":"t-ok"}">SENT</span> <span class="sku">${esc(res.sku)}</span> <span class="kv">· ${esc(res.status||"accepted")} · ${res.patchCount} change(s)</span>`;
+    (res.issues||[]).forEach(i=>h+=`<div class="${i.severity==="ERROR"?"errmsg":"kv"}">[${esc(i.severity)}] ${esc(i.code)} — ${esc(i.message)}</div>`);
+    card(h,errs.length?"bad":"");
+    if(!errs.length) line(`<span class="tag t-ok">DONE</span> Submitted. Changes can take minutes to reflect. Reload to confirm.`);
+    reviewed=false;$("btnSubmit").disabled=true;
+  }catch(e){done("error");card(esc(e.message),"bad");}
+};
+
+$("btnReload").onclick=()=>{ if(CURRENT) loadItem(CURRENT.sku); };
+</script></body></html>

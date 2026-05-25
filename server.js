@@ -231,6 +231,8 @@ async function statusCheck(parentSku, extraSkus = []) {
 const STRIP_FROM_PARENT = [
   "purchasable_offer", "fulfillment_availability", "list_price",
   "merchant_suggested_asin", "externally_assigned_product_identifier", "size",
+  // never let a parent inherit child-link/parentage from the donor clone (avoids 8031)
+  "child_parent_sku_relationship", "parentage_level",
 ];
 
 async function getDonorAttributes(donorSku) {
@@ -279,16 +281,26 @@ async function build(opts) {
   const themeAttr = (theme || "").toLowerCase();
 
   const donorAttrs = await getDonorAttributes(donorSku);
-  const parentAttrs = buildParentAttributes(donorAttrs, { theme, parentTitle, countryOfOrigin });
+
+  // RULE: parent SKU is always donor SKU + "-Parent" (guarantees it can never
+  // collide with a child SKU -> avoids error 8031). A non-derived parentSku
+  // passed in is ignored in favor of this rule.
+  const effectiveParentSku = `${donorSku}-Parent`;
+
+  // RULE: parent title is always the donor's title + " Parent".
+  const donorTitle = donorAttrs.item_name?.[0]?.value || "";
+  const effectiveParentTitle = donorTitle ? `${donorTitle} Parent` : (parentTitle || "");
+
+  const parentAttrs = buildParentAttributes(donorAttrs, { theme, parentTitle: effectiveParentTitle, countryOfOrigin });
   const parentBody = { productType, requirements: "LISTING", attributes: parentAttrs };
 
   // STEP 1 — parent
   if (commit) {
-    const res = await sp("PUT", `/listings/2021-08-01/items/${SELLER_ID}/${encodeURIComponent(parentSku)}`,
+    const res = await sp("PUT", `/listings/2021-08-01/items/${SELLER_ID}/${encodeURIComponent(effectiveParentSku)}`,
       { query: { marketplaceIds: MARKETPLACE_ID }, body: parentBody });
-    log.push({ step: "parent", sku: parentSku, status: res.status, issues: res.issues || [] });
+    log.push({ step: "parent", sku: effectiveParentSku, parentTitle: effectiveParentTitle, status: res.status, issues: res.issues || [] });
   } else {
-    log.push({ step: "parent", sku: parentSku, dryRun: true, attributeKeys: Object.keys(parentAttrs) });
+    log.push({ step: "parent", sku: effectiveParentSku, parentTitle: effectiveParentTitle, dryRun: true, attributeKeys: Object.keys(parentAttrs) });
   }
 
   // STEP 2 — children
@@ -298,7 +310,7 @@ async function build(opts) {
       log.push({ step: "child", sku: child.sku, note: "donor — left untouched" });
       continue;
     }
-    const body = { productType, patches: childOfferPatches(child, donorFulfillment, { parentSku, theme, conditionType, themeAttr }) };
+    const body = { productType, patches: childOfferPatches(child, donorFulfillment, { parentSku: effectiveParentSku, theme, conditionType, themeAttr }) };
     if (commit) {
       const res = await sp("PATCH", `/listings/2021-08-01/items/${SELLER_ID}/${encodeURIComponent(child.sku)}`,
         { query: { marketplaceIds: MARKETPLACE_ID }, body });
@@ -307,7 +319,7 @@ async function build(opts) {
       log.push({ step: "child", sku: child.sku, dryRun: true, size: child.size, price: child.price, note: "match + offer; FBA cloned from donor" });
     }
   }
-  return { commit, productType, theme, log };
+  return { commit, productType, theme, parentSku: effectiveParentSku, parentTitle: effectiveParentTitle, log };
 }
 
 // ===========================================================================
@@ -354,29 +366,228 @@ async function modifyFamily(opts) {
 }
 
 // ===========================================================================
+// RESET PARENTAGE — strip all parent/child attributes off a SKU/ASIN so it
+// becomes a clean standalone listing again. Fixes 8031 (SKU is both parent &
+// child) and 8066 (broken parentage). Then the family can be rebuilt fresh.
+// Only deletes attributes that are actually PRESENT (safe on broken listings).
+// ===========================================================================
+const PARENTAGE_ATTRS = ["child_parent_sku_relationship", "parentage_level", "variation_theme"];
+
+async function getItemFull(sku) {
+  const res = await sp("GET", `/listings/2021-08-01/items/${SELLER_ID}/${encodeURIComponent(sku)}`, {
+    query: { marketplaceIds: MARKETPLACE_ID, includedData: "summaries,attributes,relationships" },
+  });
+  const sm = res.summaries?.[0] || {};
+  const rels = res.relationships?.[0]?.relationships || [];
+  return {
+    sku, exists: true,
+    asin: sm.asin || null,
+    productType: sm.productType || null,
+    status: (sm.status || []).join(", ") || null,
+    attributes: res.attributes || {},
+    childSkus: rels.flatMap((r) => r.childSkus || []),
+    parentSkus: rels.flatMap((r) => r.parentSkus || []),
+  };
+}
+
+async function resetParentage(opts) {
+  const { sku = "", asin = "", includeRelated = false, commit = false } = opts;
+  const idx = await getIndex();
+
+  // resolve target SKUs from sku and/or asin (an ASIN can map to multiple SKUs)
+  const targets = new Set();
+  if (sku && String(sku).trim()) targets.add(String(sku).trim());
+  if (asin && String(asin).trim()) {
+    const a = String(asin).trim().toUpperCase();
+    for (const it of Object.values(idx)) if ((it.asin || "").toUpperCase() === a) targets.add(it.sku);
+  }
+  if (!targets.size) return { commit, log: [], note: "No SKU/ASIN given, or ASIN not found in catalog index." };
+
+  // optionally expand to related family members (children of a parent, or the
+  // parent + siblings of a child) so an entire broken family can be cleaned.
+  if (includeRelated) {
+    for (const t of [...targets]) {
+      const info = idx[t];
+      if (!info) continue;
+      for (const c of info.childSkus || []) targets.add(c);
+      for (const pSku of info.parentSkus || []) {
+        targets.add(pSku);
+        for (const sib of idx[pSku]?.childSkus || []) targets.add(sib);
+      }
+    }
+  }
+
+  const log = [];
+  for (const t of [...targets]) {
+    let item;
+    try { item = await getItemFull(t); }
+    catch (e) { log.push({ sku: t, error: "fetch failed: " + String(e.message || e) }); continue; }
+
+    const present = PARENTAGE_ATTRS.filter((k) => item.attributes[k] !== undefined);
+    const role = item.childSkus.length && item.parentSkus.length ? "parent+child (8031)"
+               : item.childSkus.length ? "parent"
+               : item.parentSkus.length ? "child"
+               : "standalone";
+
+    if (!present.length) {
+      log.push({ sku: t, role, note: "no parentage attributes present — already clean", asin: item.asin });
+      continue;
+    }
+    if (!item.productType) { log.push({ sku: t, role, error: "could not resolve product type" }); continue; }
+
+    const patches = present.map((k) => ({ op: "delete", path: `/attributes/${k}` }));
+    if (commit) {
+      const res = await sp("PATCH", `/listings/2021-08-01/items/${SELLER_ID}/${encodeURIComponent(t)}`,
+        { query: { marketplaceIds: MARKETPLACE_ID }, body: { productType: item.productType, patches } });
+      log.push({ sku: t, role, asin: item.asin, stripped: present, status: res.status, issues: res.issues || [] });
+    } else {
+      log.push({ sku: t, role, asin: item.asin, dryRun: true, willStrip: present,
+                 relatedChildren: item.childSkus, relatedParents: item.parentSkus });
+    }
+  }
+  return { commit, count: log.length, log };
+}
+
+// ===========================================================================
 // LIST FAMILIES — page all listings, return every parent + its children
 // ===========================================================================
-async function listFamilies() {
-  const families = [];
+// Page EVERY listing once into an index: sku -> {asin,status,theme,childSkus,parentSkus}.
+// Cached briefly so families-list and search share a single catalog scan.
+let _index = null, _indexAt = 0;
+const INDEX_TTL = 5 * 60 * 1000; // 5 min
+
+async function buildIndex() {
+  const bySku = {};
   let token = null;
-  for (let page = 0; page < 30; page++) {
+  for (let page = 0; page < 40; page++) {
     const query = { marketplaceIds: MARKETPLACE_ID, includedData: "summaries,relationships", pageSize: "20" };
     if (token) query.pageToken = token;
     const res = await sp("GET", `/listings/2021-08-01/items/${SELLER_ID}`, { query });
     for (const it of res.items || []) {
       const rels = it.relationships?.[0]?.relationships || [];
       const childSkus = rels.flatMap((r) => r.childSkus || []);
-      if (!childSkus.length) continue;
+      const parentSkus = rels.flatMap((r) => r.parentSkus || []);
       const theme = rels.map((r) => r.variationTheme?.theme).filter(Boolean)[0] || null;
       const sm = it.summaries?.[0] || {};
-      families.push({ parentSku: it.sku, asin: sm.asin || null, status: (sm.status || []).join(", ") || null, theme, childCount: childSkus.length, childSkus });
+      bySku[it.sku] = {
+        sku: it.sku,
+        asin: sm.asin || null,
+        status: (sm.status || []).join(", ") || null,
+        theme,
+        childSkus,
+        parentSkus,
+      };
     }
     token = res.pagination?.nextToken;
     if (!token) break;
     await new Promise((r) => setTimeout(r, 200));
   }
+  return bySku;
+}
+
+async function getIndex(force = false) {
+  if (!force && _index && Date.now() - _indexAt < INDEX_TTL) return _index;
+  _index = await buildIndex();
+  _indexAt = Date.now();
+  return _index;
+}
+
+// Assemble a family object (parent + children with ASINs) from the index.
+function familyFromIndex(idx, parentSku) {
+  const p = idx[parentSku];
+  if (!p) return null;
+  const childSkus = p.childSkus || [];
+  return {
+    parentSku,
+    asin: p.asin || null,
+    status: p.status || null,
+    theme: p.theme || null,
+    childCount: childSkus.length,
+    childSkus,
+    children: childSkus.map((cs) => ({ sku: cs, asin: idx[cs]?.asin || null, status: idx[cs]?.status || null })),
+  };
+}
+
+async function listFamilies() {
+  const idx = await getIndex();
+  const families = Object.values(idx)
+    .filter((it) => (it.childSkus || []).length)
+    .map((it) => familyFromIndex(idx, it.sku))
+    .filter(Boolean);
   families.sort((a, b) => a.parentSku.localeCompare(b.parentSku));
   return families;
+}
+
+// Search by ASIN, SKU, or partial SKU. Returns every family containing a match,
+// plus any matching items that aren't part of a variation family.
+async function searchItems(rawTerm) {
+  const term = String(rawTerm || "").trim().toUpperCase();
+  if (!term) return { term: "", families: [], standalone: [], scanned: 0 };
+  const idx = await getIndex();
+
+  const matched = Object.values(idx).filter((it) => {
+    const skuHit = it.sku && it.sku.toUpperCase().includes(term);
+    const asinHit = it.asin && it.asin.toUpperCase().includes(term);
+    return skuHit || asinHit;
+  });
+
+  const familyRoots = new Map(); // parentSku -> matchedSkus[]
+  const standalone = [];
+  for (const it of matched) {
+    let root = null;
+    if ((it.childSkus || []).length) root = it.sku;            // matched item is itself a parent
+    else if ((it.parentSkus || []).length) root = it.parentSkus[0]; // matched item is a child
+    if (root && idx[root]) {
+      if (!familyRoots.has(root)) familyRoots.set(root, []);
+      familyRoots.get(root).push(it.sku);
+    } else {
+      standalone.push({ sku: it.sku, asin: it.asin, status: it.status });
+    }
+  }
+
+  const families = [...familyRoots.entries()].map(([root, matchedSkus]) => {
+    const fam = familyFromIndex(idx, root);
+    if (fam) fam.matchedSkus = [...new Set(matchedSkus)];
+    return fam;
+  }).filter(Boolean);
+  families.sort((a, b) => a.parentSku.localeCompare(b.parentSku));
+
+  return { term: rawTerm, families, standalone, scanned: Object.keys(idx).length };
+}
+
+// ===========================================================================
+// LISTING EDITOR — flat item search + fetch full attributes + apply edits
+// ===========================================================================
+// Flat list of items whose SKU or ASIN matches (for the editor's picker).
+async function findItems(rawTerm) {
+  const term = String(rawTerm || "").trim().toUpperCase();
+  if (!term) return { term: "", items: [], scanned: 0 };
+  const idx = await getIndex();
+  const items = Object.values(idx)
+    .filter((it) => (it.sku && it.sku.toUpperCase().includes(term)) || (it.asin && it.asin.toUpperCase().includes(term)))
+    .map((it) => ({
+      sku: it.sku, asin: it.asin, status: it.status,
+      role: it.childSkus.length && it.parentSkus.length ? "parent+child"
+          : it.childSkus.length ? "parent"
+          : it.parentSkus.length ? "child" : "standalone",
+    }))
+    .sort((a, b) => a.sku.localeCompare(b.sku));
+  return { term: rawTerm, items, scanned: Object.keys(idx).length };
+}
+
+// Apply caller-built JSON-Patch edits to one listing. Dry-run by default —
+// the frontend computes the diff; backend just resolves productType and relays.
+async function updateListing(opts) {
+  const { sku = "", patches = [], commit = false } = opts;
+  if (!sku) throw new Error("sku is required");
+  if (!Array.isArray(patches) || !patches.length) throw new Error("no changes to submit");
+  const item = await getItemFull(sku);
+  if (!item.exists) throw new Error("listing not found: " + sku);
+  if (!item.productType) throw new Error("could not resolve product type for " + sku);
+  if (!commit) return { sku, commit: false, productType: item.productType, patchCount: patches.length, patches };
+  const res = await sp("PATCH", `/listings/2021-08-01/items/${SELLER_ID}/${encodeURIComponent(sku)}`,
+    { query: { marketplaceIds: MARKETPLACE_ID }, body: { productType: item.productType, patches } });
+  return { sku, commit: true, productType: item.productType, status: res.status, issues: res.issues || [], patchCount: patches.length };
 }
 
 // ===========================================================================
@@ -412,7 +623,12 @@ app.post("/api/preflight", wrap(async (req) => ({ rows: await preflight(req.body
 app.post("/api/status",    wrap(async (req) => ({ rows: await statusCheck(req.body.parentSku, req.body.childSkus || []) })));
 app.post("/api/build",     wrap(async (req) => build(req.body || {})));
 app.post("/api/modify",    wrap(async (req) => modifyFamily(req.body || {})));
-app.get("/api/families",   wrap(async () => ({ families: await listFamilies() })));
+app.get("/api/families",   wrap(async (req) => ({ families: await listFamilies() })));
+app.get("/api/search",     wrap(async (req) => searchItems(req.query.q)));
+app.post("/api/reset",     wrap(async (req) => resetParentage(req.body || {})));
+app.get("/api/find",       wrap(async (req) => findItems(req.query.q)));
+app.get("/api/item",       wrap(async (req) => getItemFull(req.query.sku)));
+app.post("/api/update",    wrap(async (req) => updateListing(req.body || {})));
 
 app.use(express.static(path.join(__dirname, "public")));
 

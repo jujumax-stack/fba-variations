@@ -116,11 +116,12 @@
 <header>
   <div class="brand">
     <span class="mark">FBA·<b>VARIATION</b>·BUILDER</span>
-    <span class="ver" id="ver">v1.2</span>
+    <span class="ver" id="ver">v1.5</span>
   </div>
   <div class="pills">
     <span class="pill" id="seller">seller —</span>
     <span class="pill" id="mkt">mkt —</span>
+    <a href="/editor.html" class="pill" style="text-decoration:none">Listing Editor →</a>
     <span class="pill live">LIVE SYSTEM</span>
   </div>
 </header>
@@ -129,10 +130,13 @@
   <section class="panel">
     <h2><span class="n">0</span> Families</h2>
     <div class="body">
-      <div class="actions" style="margin-top:0;align-items:center">
-        <button class="act b-info" id="btnFamilies">Load all families</button>
-        <span class="hint" id="famHint" style="align-self:center;margin-top:0"></span>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="famSearch" placeholder="Search by ASIN, SKU, or partial SKU…" autocomplete="off"
+               style="flex:1;min-width:240px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-family:var(--mono);font-size:13px;padding:9px 11px;border-radius:3px;outline:none">
+        <button class="act b-info" id="btnSearch">Search</button>
+        <button class="act" id="btnFamilies">Load all</button>
       </div>
+      <span class="hint" id="famHint" style="display:block;margin-top:8px"></span>
       <div id="famList" style="margin-top:14px"></div>
     </div>
   </section>
@@ -145,8 +149,8 @@
     <div class="body">
       <div class="row2">
         <div class="field">
-          <label class="lbl">Parent SKU</label>
-          <input type="text" id="parentSku" placeholder="TLB-019-CT" autocomplete="off">
+          <label class="lbl">Parent SKU <span style="color:var(--dim)">(auto: donor + "-Parent")</span></label>
+          <input type="text" id="parentSku" placeholder="(set from donor SKU)" autocomplete="off" readonly style="opacity:.85;cursor:not-allowed">
         </div>
         <div class="field">
           <label class="lbl">Variation theme</label>
@@ -158,7 +162,7 @@
         <div class="field">
           <label class="lbl">Donor SKU (the complete child)</label>
           <input type="text" id="donorSku" placeholder="TLB-019-CT-S" autocomplete="off">
-          <div class="hint">Parent attributes are cloned from this listing.</div>
+          <div class="hint">Parent attributes are cloned from this listing. Parent SKU &amp; title are derived from it.</div>
         </div>
         <div class="field">
           <label class="lbl">Country of origin</label>
@@ -172,8 +176,8 @@
           <input type="text" id="cond" value="new_new" autocomplete="off">
         </div>
         <div class="field">
-          <label class="lbl">Parent title <span style="color:var(--dim)">(blank = clone donor)</span></label>
-          <input type="text" id="parentTitle" placeholder="(clone from donor)" autocomplete="off">
+          <label class="lbl">Parent title <span style="color:var(--dim)">(auto: donor title + " Parent")</span></label>
+          <input type="text" id="parentTitle" placeholder="(set from donor title at build)" autocomplete="off" readonly style="opacity:.85;cursor:not-allowed">
         </div>
       </div>
 
@@ -223,6 +227,30 @@
       </div>
     </section>
 
+    <section class="panel">
+      <h2><span class="n">2c</span> Reset parentage</h2>
+      <div class="body">
+        <p class="hint" style="margin-top:0">Strips ALL parent/child attributes off an item so it becomes a clean standalone listing. Fixes errors 8031 (SKU is both parent &amp; child) and 8066 (broken parentage). After resetting, rebuild the family above.</p>
+        <div class="row2">
+          <div class="field">
+            <label class="lbl">SKU to reset</label>
+            <input type="text" id="resetSku" placeholder="JY-THTR-003-R," autocomplete="off">
+          </div>
+          <div class="field">
+            <label class="lbl">…and/or ASIN</label>
+            <input type="text" id="resetAsin" placeholder="B0…" autocomplete="off">
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="resetRelated" style="width:auto"> Also reset related family members (parent + all its children)
+        </label>
+        <div class="actions">
+          <button class="act b-go" id="btnResetDry">Dry-run reset</button>
+          <button class="act b-live" id="btnResetApply" disabled>● Apply reset (live)</button>
+        </div>
+      </div>
+    </section>
+
     <section class="panel" id="out">
       <h2><span class="n">3</span> Console</h2>
       <div class="body">
@@ -264,6 +292,12 @@ function readKids(){
 }
 seed.forEach(k=>$("kids").appendChild(kidRow(k)));
 $("addKid").onclick=()=>$("kids").appendChild(kidRow());
+// RULE: parent SKU is always donor SKU + "-Parent" (prevents 8031 collisions).
+function syncParentSku(){
+  const d=$("donorSku").value.trim();
+  $("parentSku").value = d ? d+"-Parent" : "";
+}
+$("donorSku").addEventListener("input",syncParentSku);
 
 // ---------- console ----------
 const con=$("console");
@@ -409,7 +443,7 @@ $("btnStatus").onclick=async()=>{
 // ---------- helpers ----------
 function renderLog(l){
   if(l.step==="parent"){
-    if(l.dryRun)card(`<span class="tag t-dry">PARENT</span> <span class="sku">${esc(l.sku)}</span><div class="kv">would PUT · attrs: ${esc((l.attributeKeys||[]).join(", "))}</div>`);
+    if(l.dryRun)card(`<span class="tag t-dry">PARENT</span> <span class="sku">${esc(l.sku)}</span>${l.parentTitle?`<div class="kv">title: "${esc(l.parentTitle)}"</div>`:""}<div class="kv">would PUT · attrs: ${esc((l.attributeKeys||[]).join(", "))}</div>`);
     else statusCard("PARENT",l);
   }else{
     if(l.note&&!l.size){card(`<span class="tag t-dry">CHILD</span> <span class="sku">${esc(l.sku)}</span> <span class="kv">${esc(l.note)}</span>`);return;}
@@ -425,8 +459,8 @@ function statusCard(kind,l){
   card(h,errs.length?"bad":"");
 }
 function validate(g){
-  if(!g.parentSku){clearOut("error");card("Parent SKU is required.","bad");return false;}
   if(!g.donorSku){clearOut("error");card("Donor SKU is required (the complete child to clone the parent from).","bad");return false;}
+  if(!g.parentSku){$("parentSku").value=g.donorSku+"-Parent";g.parentSku=$("parentSku").value;}
   if(!g.theme){clearOut("error");card("Variation theme is required.","bad");return false;}
   if(!g.children.length){clearOut("error");card("Add at least one child.","bad");return false;}
   const priced=g.children.filter(k=>k.sku!==g.donorSku);
@@ -484,6 +518,56 @@ $("btnModApply").onclick=async()=>{
 document.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",()=>{if(modDryOK){modDryOK=false;$("btnModApply").disabled=true;}}));
 $("kids").addEventListener("input",()=>{if(modDryOK){modDryOK=false;$("btnModApply").disabled=true;}});
 
+// ---------- reset parentage ----------
+let resetDryOK=false;
+function resetGather(){
+  return { sku:$("resetSku").value.trim(), asin:$("resetAsin").value.trim(), includeRelated:$("resetRelated").checked };
+}
+function renderReset(l){
+  if(l.error){card(`<span class="sku">${esc(l.sku)}</span> <span class="errmsg">${esc(l.error)}</span>`,"bad");return;}
+  if(l.note){card(`<span class="tag t-ok">SKIP</span> <span class="sku">${esc(l.sku)}</span> <span class="kv">[${esc(l.role||"")}] ${esc(l.note)}</span>`);return;}
+  if(l.dryRun){
+    let h=`<span class="tag t-dry">RESET</span> <span class="sku">${esc(l.sku)}</span> <span class="kv">[${esc(l.role)}]</span>`;
+    h+=`<div class="kv">will strip: ${esc((l.willStrip||[]).join(", "))}</div>`;
+    if((l.relatedChildren||[]).length) h+=`<div class="kv" style="font-size:11px">children pointing here: ${esc(l.relatedChildren.join(", "))}</div>`;
+    if((l.relatedParents||[]).length) h+=`<div class="kv" style="font-size:11px">parent(s): ${esc(l.relatedParents.join(", "))}</div>`;
+    card(h);return;
+  }
+  const errs=(l.issues||[]).filter(i=>i.severity==="ERROR");
+  let h=`<span class="tag ${errs.length?"t-err":"t-ok"}">RESET</span> <span class="sku">${esc(l.sku)}</span> <span class="kv">[${esc(l.role)}] · stripped ${esc((l.stripped||[]).join(", "))} · ${esc(l.status||"accepted")}</span>`;
+  (l.issues||[]).forEach(i=>h+=`<div class="${i.severity==="ERROR"?"errmsg":"kv"}">[${esc(i.severity)}] ${esc(i.code)} — ${esc(i.message)}</div>`);
+  card(h,errs.length?"bad":"");
+}
+$("btnResetDry").onclick=async()=>{
+  const g=resetGather();
+  if(!g.sku && !g.asin){clearOut("error");card("Enter a SKU and/or ASIN to reset.","bad");return;}
+  clearOut("reset dry-run");busy("resolving targets + reading attributes");
+  try{
+    const res=await api("/api/reset",{...g,commit:false});
+    done("reset dry-run complete");
+    if(!res.log.length){card(res.note||"Nothing matched.","warn");return;}
+    line(`<span class="tag t-dry">RESET</span> ${res.log.length} target(s)`);
+    res.log.forEach(renderReset);
+    const anyToStrip=res.log.some(l=>l.willStrip&&l.willStrip.length);
+    if(anyToStrip){resetDryOK=true;$("btnResetApply").disabled=false;line(`<span class="tag t-ok">READY</span> Apply unlocked.`);}
+    else line(`<span class="tag t-ok">CLEAN</span> Nothing to strip — already standalone.`);
+  }catch(e){done("error");card(esc(e.message),"bad");resetDryOK=false;$("btnResetApply").disabled=true;}
+};
+$("btnResetApply").onclick=async()=>{
+  if(!resetDryOK){card("Run a dry-run first.","warn");return;}
+  const g=resetGather();
+  if(!confirm(`RESET PARENTAGE\n\nThis strips parent/child attributes off the matched listing(s), making them standalone. Inventory & offers are kept. Proceed?`))return;
+  clearOut("reset (live)");busy("stripping parentage");
+  try{
+    const res=await api("/api/reset",{...g,commit:true});
+    done("reset submitted");
+    res.log.forEach(renderReset);
+    line(`<span class="tag t-ok">SENT</span> Done. Run Status/Search to confirm, then rebuild the family above.`);
+    resetDryOK=false;$("btnResetApply").disabled=true;
+  }catch(e){done("error");card(esc(e.message),"bad");}
+};
+["resetSku","resetAsin","resetRelated"].forEach(id=>$(id).addEventListener("input",()=>{if(resetDryOK){resetDryOK=false;$("btnResetApply").disabled=true;}}));
+
 // ---------- families browser ----------
 function loadFamily(f){
   $("parentSku").value=f.parentSku;
@@ -495,8 +579,45 @@ function loadFamily(f){
   clearOut("loaded");
   line(`<span class="tag t-ok">LOADED</span> Family <b>${esc(f.parentSku)}</b> — ${f.childCount} children · theme ${esc(f.theme||"?")}. Run <b>Status</b> for the live tree, or use <b>Modify</b> to add/remove.`);
 }
+// highlight a matched substring inside a sku/asin string
+function hl(text, term){
+  if(!text) return "—";
+  const t=String(text);
+  if(!term) return esc(t);
+  const i=t.toUpperCase().indexOf(term.toUpperCase());
+  if(i<0) return esc(t);
+  return esc(t.slice(0,i))+'<span style="color:var(--amber);font-weight:600">'+esc(t.slice(i,i+term.length))+'</span>'+esc(t.slice(i+term.length));
+}
+// render a list of family objects into #famList; term (optional) highlights matches
+function renderFamilyCards(fams, term){
+  $("famList").innerHTML="";
+  fams.forEach((f,i)=>{
+    const matched=new Set(f.matchedSkus||[]);
+    const childLine=(f.children&&f.children.length?f.children:(f.childSkus||[]).map(s=>({sku:s,asin:null})))
+      .map(c=>{
+        const isM=matched.has(c.sku)|| (term&&((c.sku||"").toUpperCase().includes(term.toUpperCase())||(c.asin||"").toUpperCase().includes(term.toUpperCase())));
+        const txt=hl(c.sku,term)+(c.asin?` <span style="color:var(--dim)">(${hl(c.asin,term)})</span>`:"");
+        return isM?`<span style="background:#1e1808;border:1px solid var(--amber-dim);border-radius:3px;padding:1px 5px">${txt}</span>`:txt;
+      }).join("  ·  ");
+    const matchTag=(f.matchedSkus&&f.matchedSkus.length)?`<span class="tag t-warn" style="margin-left:8px">match</span>`:"";
+    const d=document.createElement("div"); d.className="card";
+    d.innerHTML=`<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+      <div style="min-width:0">
+        <div><span class="sku">${hl(f.parentSku,term)}</span>
+          <span class="tag t-dry" style="margin-left:8px">${esc(f.theme||"?")}</span>
+          <span class="kv"> · ${f.childCount} children</span>${matchTag}</div>
+        <div class="kv">parent asin ${hl(f.asin,term)}${f.status?" · "+esc(f.status):""}</div>
+        <div class="kv" style="font-size:11px;color:var(--dim);line-height:1.7">${childLine}</div>
+      </div>
+      <button class="act b-info famEdit" data-i="${i}" style="white-space:nowrap">Edit children →</button>
+    </div>`;
+    $("famList").appendChild(d);
+  });
+  document.querySelectorAll(".famEdit").forEach(b=>b.onclick=()=>loadFamily(fams[+b.dataset.i]));
+}
+
 $("btnFamilies").onclick=async()=>{
-  $("btnFamilies").disabled=true; $("famHint").textContent="scanning all listings (~20s)…"; $("famList").innerHTML="";
+  $("btnFamilies").disabled=true; $("btnSearch").disabled=true; $("famHint").textContent="scanning all listings (~20s)…"; $("famList").innerHTML="";
   try{
     const r=await fetch("/api/families");
     const j=await r.json();
@@ -504,24 +625,38 @@ $("btnFamilies").onclick=async()=>{
     const fams=j.families||[];
     $("famHint").textContent=fams.length+" parent"+(fams.length===1?"":"s")+" found";
     if(!fams.length){$("famList").innerHTML='<div class="kv" style="padding:6px 0">No variation parents found.</div>';return;}
-    fams.forEach((f,i)=>{
-      const d=document.createElement("div"); d.className="card";
-      d.innerHTML=`<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
-        <div style="min-width:0">
-          <div><span class="sku">${esc(f.parentSku)}</span>
-            <span class="tag t-dry" style="margin-left:8px">${esc(f.theme||"?")}</span>
-            <span class="kv"> · ${f.childCount} children</span></div>
-          <div class="kv">asin ${esc(f.asin||"—")}${f.status?" · "+esc(f.status):""}</div>
-          <div class="kv" style="font-size:11px;color:var(--dim)">${(f.childSkus||[]).map(esc).join("  ·  ")}</div>
-        </div>
-        <button class="act b-info famEdit" data-i="${i}" style="white-space:nowrap">Edit children →</button>
-      </div>`;
-      $("famList").appendChild(d);
-    });
-    document.querySelectorAll(".famEdit").forEach(b=>b.onclick=()=>loadFamily(fams[+b.dataset.i]));
+    renderFamilyCards(fams,"");
   }catch(e){$("famHint").textContent="";$("famList").innerHTML='<div class="errmsg" style="padding:6px 0">'+esc(e.message)+'</div>';}
-  finally{$("btnFamilies").disabled=false;}
+  finally{$("btnFamilies").disabled=false;$("btnSearch").disabled=false;}
 };
+
+async function runSearch(){
+  const term=$("famSearch").value.trim();
+  if(!term){$("famHint").textContent="Type an ASIN, SKU, or partial SKU to search.";return;}
+  $("btnSearch").disabled=true; $("btnFamilies").disabled=true; $("famHint").textContent="searching…"; $("famList").innerHTML="";
+  try{
+    const r=await fetch("/api/search?q="+encodeURIComponent(term));
+    const j=await r.json();
+    if(!r.ok) throw new Error(j.error||("HTTP "+r.status));
+    const fams=j.families||[], solo=j.standalone||[];
+    const bits=[];
+    bits.push(fams.length+" famil"+(fams.length===1?"y":"ies"));
+    if(solo.length) bits.push(solo.length+" non-family match"+(solo.length===1?"":"es"));
+    bits.push("scanned "+j.scanned);
+    $("famHint").innerHTML='“'+esc(term)+'” → '+bits.join(" · ");
+    if(!fams.length && !solo.length){$("famList").innerHTML='<div class="kv" style="padding:6px 0">No SKU or ASIN matched.</div>';return;}
+    renderFamilyCards(fams,term);
+    if(solo.length){
+      const d=document.createElement("div"); d.className="card warn";
+      d.innerHTML='<div class="warnmsg" style="margin-top:0">Matched, but NOT part of any variation family:</div>'+
+        solo.map(x=>`<div class="kv" style="font-size:12px">${hl(x.sku,term)} ${x.asin?`(${hl(x.asin,term)})`:""}${x.status?" · "+esc(x.status):""}</div>`).join("");
+      $("famList").appendChild(d);
+    }
+  }catch(e){$("famHint").textContent="";$("famList").innerHTML='<div class="errmsg" style="padding:6px 0">'+esc(e.message)+'</div>';}
+  finally{$("btnSearch").disabled=false;$("btnFamilies").disabled=false;}
+}
+$("btnSearch").onclick=runSearch;
+$("famSearch").addEventListener("keydown",(e)=>{if(e.key==="Enter")runSearch();});
 
 // invalidate dry-run if the definition changes
 document.querySelectorAll("input").forEach(el=>el.addEventListener("input",()=>{if(dryRunOK){dryRunOK=false;$("btnBuild").disabled=true;}}));
